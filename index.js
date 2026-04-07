@@ -147,6 +147,20 @@ async function showIO() {
   console.log(`  ${chalk.cyan('IOps ')}  ${chalk.bold.cyan(tIOps.toFixed(0).padStart(8) + ' ops/s')}`);
 }
 
+// ── Spinner ───────────────────────────────────────────────────────────────────
+
+function spinner(label) {
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let i = 0;
+  const id = setInterval(() => {
+    process.stdout.write(`\r  ${chalk.cyan(frames[i++ % frames.length])}  ${chalk.dim(label)}`);
+  }, 80);
+  return () => {
+    clearInterval(id);
+    process.stdout.write('\r\x1b[2K'); // clear the spinner line
+  };
+}
+
 // ── Command handler ───────────────────────────────────────────────────────────
 
 async function runCommand(input) {
@@ -181,11 +195,11 @@ async function runCommand(input) {
   const wantGpu  = all || args.includes('gpu');
   const wantIO   = all || args.includes('io');
 
-  if (wantDisk) await showDisk();
-  if (wantRam)  await showRam();
-  if (wantCpu)  await showCpu();
-  if (wantGpu)  await showGpu();
-  if (wantIO)   await showIO();
+  if (wantDisk) { const stop = spinner('Reading disk usage...'); await showDisk(); stop(); }
+  if (wantRam)  { const stop = spinner('Reading memory...');     await showRam();  stop(); }
+  if (wantCpu)  { const stop = spinner('Reading CPU load...');   await showCpu();  stop(); }
+  if (wantGpu)  { const stop = spinner('Reading GPU stats...');  await showGpu();  stop(); }
+  if (wantIO)   { const stop = spinner('Reading disk I/O...');   await showIO();   stop(); }
 
   console.log('');
 }
