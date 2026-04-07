@@ -147,3 +147,6 @@ bunkercli/
 ├── README.md       # This file
 └── USER_GUIDE.md   # Detailed user guide
 ```
+Example:
+<img width="601" height="684" alt="bunkercli" src="https://github.com/user-attachments/assets/134e5d5b-67d8-45a9-a212-7c98b8536039" />
+
