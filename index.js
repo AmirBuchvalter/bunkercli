@@ -3,7 +3,174 @@ import si from 'systeminformation';
 import chalk from 'chalk';
 import readline from 'readline';
 
+const { stdout } = process;
 const BAR_WIDTH = 30;
+
+// ── Boot animation ────────────────────────────────────────────────────────────
+
+const RESET = '\x1b[0m';
+const rgb   = (r, g, b) => `\x1b[38;2;${r};${g};${b}m`;
+const bgRgb = (r, g, b) => `\x1b[48;2;${r};${g};${b}m`;
+
+const cursor = {
+  hide : () => stdout.write('\x1b[?25l'),
+  show : () => stdout.write('\x1b[?25h'),
+  up   : (n) => stdout.write(`\x1b[${n}A`),
+  col1 : ()  => stdout.write('\x1b[1G'),
+  clr  : ()  => stdout.write('\x1b[2K'),
+};
+
+const OC = {
+  dark   : rgb(136,  34,   0),
+  mid    : rgb(204,  85,  34),
+  hi     : rgb(255, 119,  51),
+  eye    : rgb(255, 238, 204),
+  muted  : rgb( 85,  85,  85),
+  bright : rgb(240, 236, 224),
+  accent : rgb(204, 136,  85),
+  green  : rgb(109, 179, 122),
+  amber  : rgb(232, 184,  75),
+  dimgfx : rgb( 42,  42,  42),
+};
+
+// 0 = empty  1 = dark  2 = mid  3 = hi  4 = eye
+// Bunker survivor under fire — 2D man in an underground bunker with incoming missiles.
+const FRAMES = [
+  // Frame 0 — missile inbound from above
+  [ [0,0,0,0,0,0,3],[0,1,1,1,0,0,2],[0,4,3,4,0,0,0],[1,3,3,3,1,0,0],[0,3,3,3,0,0,0],[0,2,0,2,0,0,0],[0,1,0,1,0,0,0] ],
+  // Frame 1 — missile closing in on the wall
+  [ [0,0,0,0,0,0,0],[0,1,1,1,0,3,0],[0,4,3,4,0,2,0],[1,3,3,3,1,0,0],[0,3,3,3,0,0,0],[0,2,0,2,0,0,0],[0,1,0,1,0,0,0] ],
+  // Frame 2 — impact against the bunker
+  [ [0,0,0,0,0,0,0],[0,1,1,1,0,0,0],[0,4,3,4,0,0,0],[1,3,3,3,1,3,2],[0,3,3,3,0,2,0],[0,2,0,2,0,0,0],[0,1,0,1,0,0,0] ],
+];
+
+const PAL_FG = [null, OC.dark, OC.mid, OC.hi, OC.eye];
+const rgbNums = (esc) => { const m = esc.match(/38;2;(\d+);(\d+);(\d+)/); return m ? [+m[1],+m[2],+m[3]] : [0,0,0]; };
+
+function renderFrame(fi) {
+  return FRAMES[fi].map(row => {
+    let s = '';
+    for (const v of row) {
+      if (PAL_FG[v]) {
+        const [r,g,b] = rgbNums(PAL_FG[v]);
+        s += bgRgb(r,g,b) + '  ' + RESET;
+      } else {
+        s += '  ';
+      }
+    }
+    return s;
+  });
+}
+
+function padLabel(str, len) {
+  const visible = str.replace(/\x1b\[[^m]*m/g, '');
+  return str + ' '.repeat(Math.max(0, len - visible.length));
+}
+
+async function bootScreen() {
+  const name    = 'BunkerCLI';
+  const version = 'v1.0.0';
+
+  cursor.hide();
+
+  const f0 = renderFrame(0);
+  const HEADER_LINES = [
+    '',
+    `  ${f0[0]}  ${OC.bright}${name}${RESET}`,
+    `  ${f0[1]}  ${OC.muted}${version}${RESET}`,
+    `  ${f0[2]}`,
+    `  ${f0[3]}`,
+    `  ${f0[4]}`,
+    `  ${f0[5]}`,
+    `  ${f0[6]}`,
+    '',
+    `  ${OC.dimgfx}${'─'.repeat(54)}${RESET}`,
+    '',
+  ];
+
+  for (const line of HEADER_LINES) stdout.write(line + '\n');
+
+  const OCTO_ROW_COUNT = 7;
+  // Lines printed after the last octo row within the header block
+  let linesBelow = HEADER_LINES.length - (2 - 1) - OCTO_ROW_COUNT;
+
+  let frameIdx = 0, animDir = 1;
+
+  function redrawOcto() {
+    cursor.up(linesBelow + OCTO_ROW_COUNT);
+    const f = renderFrame(frameIdx);
+    stdout.write(`  ${f[0]}  ${OC.bright}${name}${RESET}\n`);
+    stdout.write(`  ${f[1]}  ${OC.muted}${version}${RESET}\n`);
+    for (let r = 2; r < OCTO_ROW_COUNT; r++) stdout.write(`  ${f[r]}\n`);
+    if (linesBelow > 0) stdout.write(`\x1b[${linesBelow}B`);
+  }
+
+  const animTimer = setInterval(() => {
+    frameIdx += animDir;
+    if (frameIdx >= FRAMES.length - 1) animDir = -1;
+    if (frameIdx <= 0)                 animDir =  1;
+    redrawOcto();
+  }, 380);
+
+  const SPIN = ['·', '✻', '✽', '✶', '✳', '✢'];
+
+  const checks = [
+    { label: 'Sealing bunker hatches', delay: 400, ok: '✓ sealed' },
+    { label: 'Loading ammunition',     delay: 350, ok: '✓ loaded' },
+    { label: 'Scanning perimeter',     delay: 380, ok: '✓ clear'  },
+  ];
+
+  for (const check of checks) {
+    const label = padLabel(OC.muted + check.label + RESET, 30 + OC.muted.length + RESET.length);
+    let si_idx = 0;
+
+    stdout.write(`  ${label} ${OC.muted}${SPIN[0]}${RESET}`);
+    linesBelow++;
+
+    const spinTimer = setInterval(() => {
+      si_idx = (si_idx + 1) % SPIN.length;
+      cursor.col1(); cursor.clr();
+      stdout.write(`  ${label} ${OC.muted}${SPIN[si_idx]}${RESET}`);
+    }, 90);
+
+    await new Promise(r => setTimeout(r, check.delay));
+
+    clearInterval(spinTimer);
+    cursor.col1(); cursor.clr();
+    stdout.write(`  ${label} ${OC.green}${check.ok}${RESET}\n`);
+    await new Promise(r => setTimeout(r, 30));
+  }
+
+  clearInterval(animTimer);
+
+  // Progress bar
+  stdout.write('\n');
+  linesBelow++;
+  const barLabel = `  ${OC.muted}Initializing runtime${RESET}`;
+  const BOOT_BAR = 28;
+
+  for (let i = 0; i <= BOOT_BAR; i++) {
+    cursor.col1(); cursor.clr();
+    const filled = OC.accent + '█'.repeat(i)            + RESET;
+    const empty  = OC.dimgfx + '░'.repeat(BOOT_BAR - i) + RESET;
+    const pct    = OC.muted  + String(Math.round(i / BOOT_BAR * 100)).padStart(3) + '%' + RESET;
+    stdout.write(`${barLabel}  ${filled}${empty}  ${pct}`);
+    await new Promise(r => setTimeout(r, 28));
+  }
+  cursor.col1(); cursor.clr();
+  stdout.write(`${barLabel}  ${OC.green}${'█'.repeat(BOOT_BAR)}${RESET}  ${OC.green}100%${RESET}\n`);
+
+  // Final static frame
+  linesBelow += 2;
+  frameIdx = 0;
+  redrawOcto();
+
+  stdout.write('\n');
+  stdout.write(`  ${OC.green}✓${RESET} ${OC.bright}Bunker secured.${RESET}  ${OC.muted}Type ${OC.accent}/help${OC.muted} for commands.${RESET}\n`);
+  stdout.write('\n');
+
+  cursor.show();
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,6 +215,8 @@ function showHelp() {
 
   console.log(chalk.bold.white('OPTIONS'));
   const opts = [
+    ['/attack',     'Fight off an active zombie wave'],
+    ['/restart',    'Rebuild the bunker after death'],
     ['/all',        'Show all sections'],
     ['/disk',       'Show disk usage only'],
     ['/ram',        'Show RAM usage only'],
@@ -157,14 +326,221 @@ function spinner(label) {
   }, 80);
   return () => {
     clearInterval(id);
-    process.stdout.write('\r\x1b[2K'); // clear the spinner line
+    process.stdout.write('\r\x1b[2K');
   };
+}
+
+// ── Game state ────────────────────────────────────────────────────────────────
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+const WAVE_DURATION_MS = 10000;
+const WAVE_DAMAGE      = 50;
+const WAVE_BREATHER_MS = 4000;
+const FIRST_WAVE_MS    = 5000;
+
+const game = {
+  hp: 100,
+  maxHp: 100,
+  alive: true,
+  atPrompt: false,
+  animating: false,
+  waveActive: false,
+  waveStartedAt: 0,
+  waveCount: 0,
+  survivedWaves: 0,
+  nextWaveAt: 0,
+};
+
+function hpBar() {
+  const width = 10;
+  const filled = Math.round((game.hp / game.maxHp) * width);
+  const color = game.hp > 60 ? chalk.green : game.hp > 30 ? chalk.yellow : chalk.red;
+  return chalk.dim('HP[') + color('█'.repeat(filled)) + chalk.gray('░'.repeat(width - filled)) + chalk.dim(`] ${String(game.hp).padStart(3)}`);
+}
+
+function zombieBar() {
+  const width = 10;
+  const remaining = Math.max(0, WAVE_DURATION_MS - (Date.now() - game.waveStartedAt));
+  const elapsed = WAVE_DURATION_MS - remaining;
+  const filled = Math.min(width, Math.round((elapsed / WAVE_DURATION_MS) * width));
+  const secs = Math.ceil(remaining / 1000);
+  return chalk.red('Z[') + chalk.bold.red('█'.repeat(filled)) + chalk.gray('░'.repeat(width - filled)) + chalk.red(`] ${String(secs).padStart(2)}s`);
+}
+
+function buildPrompt() {
+  if (!game.alive) {
+    return chalk.bold.red('[DEAD] ') + chalk.yellow('restart') + chalk.cyan('> ');
+  }
+  let p = hpBar() + ' ';
+  if (game.waveActive) p += zombieBar() + ' ';
+  p += chalk.bold.green('bunker') + chalk.cyan('> ');
+  return p;
+}
+
+function showPrompt(rl) {
+  rl.setPrompt(buildPrompt());
+  rl.prompt();
+  game.atPrompt = true;
+}
+
+function refreshPrompt(rl) {
+  if (!game.atPrompt || game.animating) return;
+  const buffered = rl.line || '';
+  process.stdout.write('\r\x1b[2K');
+  rl.setPrompt(buildPrompt());
+  rl.prompt(true);
+  if (buffered) process.stdout.write(buffered);
+}
+
+function printAbovePrompt(rl, text) {
+  const buffered = rl.line || '';
+  process.stdout.write('\r\x1b[2K');
+  process.stdout.write(text + '\n');
+  rl.setPrompt(buildPrompt());
+  rl.prompt(true);
+  if (buffered) process.stdout.write(buffered);
+}
+
+function startWave(rl) {
+  game.waveActive = true;
+  game.waveStartedAt = Date.now();
+  game.waveCount++;
+  const msg =
+    '\n' +
+    chalk.bold.red('  ⚠  WARNING: ') + chalk.red(`Zombie wave #${game.waveCount} approaching!`) + '\n' +
+    chalk.dim('     Type ') + chalk.yellow('/attack') + chalk.dim(' before the countdown hits zero.');
+  printAbovePrompt(rl, msg);
+}
+
+async function playArrivalAnimation(rl) {
+  const frames = [
+    [
+      '',
+      chalk.red('       r   r   r      r   r   r'),
+      chalk.dim('     ...shambling at the gates...'),
+    ],
+    [
+      '',
+      chalk.bold.red('     GRRROOOAAAAAAAN...'),
+      chalk.red('     /¯\\  /¯\\  /¯\\  /¯\\'),
+      chalk.red('     |o|  |o|  |o|  |o|'),
+      chalk.red('     /_\\  /_\\  /_\\  /_\\'),
+    ],
+    [
+      '',
+      chalk.bold.red('     *** BANG! BANG! BANG! ***'),
+      chalk.red('     |o||o||o||o|') + chalk.bold.red('  THE HATCH BUCKLES'),
+    ],
+    [
+      '',
+      chalk.bold.red('     >>>  BREACH  <<<  ') + chalk.red('zombies pour in!'),
+      chalk.bold.red('     ✗ ✗ ✗ ✗ ✗ ✗ ✗ ✗'),
+    ],
+  ];
+  for (const f of frames) {
+    printAbovePrompt(rl, f.join('\n'));
+    await sleep(550);
+  }
+}
+
+async function playDeathAnimation(rl) {
+  const fades = [
+    chalk.red('  ...your vision blurs...'),
+    chalk.dim('  ...the bunker grows cold...'),
+    chalk.gray('  ...silence...'),
+  ];
+  for (const line of fades) {
+    printAbovePrompt(rl, line);
+    await sleep(450);
+  }
+  await sleep(350);
+
+  console.clear();
+  console.log();
+  console.log(chalk.bold.red('  ██╗   ██╗ ██████╗ ██╗   ██╗    ██████╗ ██╗███████╗██████╗ '));
+  console.log(chalk.bold.red('  ╚██╗ ██╔╝██╔═══██╗██║   ██║    ██╔══██╗██║██╔════╝██╔══██╗'));
+  console.log(chalk.bold.red('   ╚████╔╝ ██║   ██║██║   ██║    ██║  ██║██║█████╗  ██║  ██║'));
+  console.log(chalk.bold.red('    ╚██╔╝  ██║   ██║██║   ██║    ██║  ██║██║██╔══╝  ██║  ██║'));
+  console.log(chalk.bold.red('     ██║   ╚██████╔╝╚██████╔╝    ██████╔╝██║███████╗██████╔╝'));
+  console.log(chalk.bold.red('     ╚═╝    ╚═════╝  ╚═════╝     ╚═════╝ ╚═╝╚══════╝╚═════╝ '));
+  console.log();
+  console.log(chalk.dim(`  The bunker falls silent. Waves survived: `) + chalk.bold.white(String(game.survivedWaves)));
+  console.log();
+  console.log(chalk.dim('  Type ') + chalk.yellow('/restart') + chalk.dim(' to rebuild the bunker, or ') + chalk.yellow('/exit') + chalk.dim(' to quit.'));
+  console.log();
+}
+
+async function waveArrives(rl) {
+  game.waveActive = false;
+  game.animating = true;
+
+  await playArrivalAnimation(rl);
+
+  game.hp = Math.max(0, game.hp - WAVE_DAMAGE);
+  printAbovePrompt(rl,
+    chalk.bold.red(`  ✗ You took ${WAVE_DAMAGE} damage!  `) +
+    chalk.dim(`HP: ${game.hp}/${game.maxHp}`)
+  );
+
+  if (game.hp <= 0) {
+    await playDeathAnimation(rl);
+    game.alive = false;
+  }
+
+  game.animating = false;
+  game.nextWaveAt = Date.now() + WAVE_BREATHER_MS;
+  refreshPrompt(rl);
+}
+
+function gameTick(rl) {
+  if (!game.alive || game.animating) return;
+  if (!game.atPrompt) return; // pause the clock during command execution
+
+  if (!game.waveActive && Date.now() >= game.nextWaveAt) {
+    startWave(rl);
+    return;
+  }
+  if (game.waveActive) {
+    const remaining = WAVE_DURATION_MS - (Date.now() - game.waveStartedAt);
+    if (remaining <= 0) {
+      waveArrives(rl);
+      return;
+    }
+    refreshPrompt(rl);
+  }
+}
+
+function attackZombies() {
+  if (!game.waveActive) {
+    console.log(chalk.dim('  The perimeter is quiet. No zombies in sight.\n'));
+    return;
+  }
+  game.waveActive = false;
+  game.survivedWaves++;
+  game.nextWaveAt = Date.now() + WAVE_BREATHER_MS;
+  console.log(
+    chalk.bold.green('  ✓ Wave repelled! ') +
+    chalk.dim(`The bunker holds. (waves survived: ${game.survivedWaves})`) + '\n'
+  );
+}
+
+function restartBunker() {
+  game.hp = game.maxHp;
+  game.alive = true;
+  game.waveActive = false;
+  game.waveCount = 0;
+  game.survivedWaves = 0;
+  game.animating = false;
+  game.nextWaveAt = Date.now() + FIRST_WAVE_MS;
+  console.clear();
+  header();
+  console.log(chalk.bold.green('  ✓ Bunker rebuilt. ') + chalk.dim('Health restored. Stand by for the next wave...\n'));
 }
 
 // ── Command handler ───────────────────────────────────────────────────────────
 
 async function runCommand(input) {
-  // Strip leading slash so /disk and disk both work
   const args = input.trim().toLowerCase().split(/\s+/).filter(Boolean).map(a => a.replace(/^\//, ''));
 
   if (args.length === 0) return;
@@ -180,7 +556,30 @@ async function runCommand(input) {
     return;
   }
 
-  const known = ['disk', 'ram', 'cpu', 'gpu', 'io', 'all', 'clear', 'help', 'h', '?', 'exit', 'quit'];
+  if (args.includes('restart')) {
+    if (game.alive) {
+      console.log(chalk.dim('  Bunker is already operational.\n'));
+    } else {
+      restartBunker();
+    }
+    return;
+  }
+
+  if (!game.alive) {
+    console.log(
+      chalk.dim('  You are dead. Type ') +
+      chalk.yellow('/restart') +
+      chalk.dim(' to rebuild the bunker.\n')
+    );
+    return;
+  }
+
+  if (args.includes('attack')) {
+    attackZombies();
+    return;
+  }
+
+  const known = ['disk', 'ram', 'cpu', 'gpu', 'io', 'all', 'clear', 'help', 'h', '?', 'exit', 'quit', 'attack', 'restart'];
   const unknown = args.filter(a => !known.includes(a));
   if (unknown.length) {
     console.log(chalk.red(`  Unknown command: ${unknown.join(', ')}`));
@@ -213,17 +612,18 @@ function startPrompt() {
     prompt: chalk.bold.green('bunker') + chalk.cyan('> '),
   });
 
-  console.clear();
-  header();
-  console.log(chalk.dim('  Type a command to get started. Type /help for options, /exit to quit.\n'));
+  game.nextWaveAt = Date.now() + FIRST_WAVE_MS;
+  showPrompt(rl);
 
-  rl.prompt();
+  const tickTimer = setInterval(() => gameTick(rl), 500);
 
   rl.on('line', async (line) => {
+    game.atPrompt = false;
     const input = line.trim();
 
     const cmd = input.toLowerCase();
     if (cmd === '/exit' || cmd === '/quit' || cmd === 'exit' || cmd === 'quit') {
+      clearInterval(tickTimer);
       console.log(chalk.dim('\n  Goodbye!\n'));
       process.exit(0);
     }
@@ -234,10 +634,16 @@ function startPrompt() {
       console.error(chalk.red('  Error: ') + err.message + '\n');
     }
 
-    rl.prompt();
+    showPrompt(rl);
   });
 
-  rl.on('close', () => process.exit(0));
+  rl.on('close', () => {
+    clearInterval(tickTimer);
+    process.exit(0);
+  });
 }
 
+// ── Entry point ───────────────────────────────────────────────────────────────
+
+await bootScreen();
 startPrompt();
