@@ -2,6 +2,11 @@
 import si from 'systeminformation';
 import chalk from 'chalk';
 import readline from 'readline';
+import {
+  initGame, game,
+  showPrompt, gameTick,
+  attackZombies, restartBunker, startGame,
+} from './game.js';
 
 const { stdout } = process;
 const BAR_WIDTH = 30;
@@ -21,30 +26,67 @@ const cursor = {
 };
 
 const OC = {
-  dark   : rgb(136,  34,   0),
-  mid    : rgb(204,  85,  34),
-  hi     : rgb(255, 119,  51),
-  eye    : rgb(255, 238, 204),
-  muted  : rgb( 85,  85,  85),
-  bright : rgb(240, 236, 224),
-  accent : rgb(204, 136,  85),
-  green  : rgb(109, 179, 122),
-  amber  : rgb(232, 184,  75),
-  dimgfx : rgb( 42,  42,  42),
+  dark     : rgb(136,  34,   0),
+  mid      : rgb(204,  85,  34),
+  hi       : rgb(255, 119,  51),
+  eye      : rgb(255, 238, 204),
+  muted    : rgb( 85,  85,  85),
+  bright   : rgb(240, 236, 224),
+  accent   : rgb(204, 136,  85),
+  green    : rgb(109, 179, 122),
+  amber    : rgb(232, 184,  75),
+  dimgfx   : rgb( 42,  42,  42),
+  concrete : rgb( 90,  90,  85),
+  military : rgb( 75, 110,  55),
+  leaves   : rgb( 46,  95,  50),
+  trunk    : rgb( 80,  45,  20),
 };
 
-// 0 = empty  1 = dark  2 = mid  3 = hi  4 = eye
-// Bunker survivor under fire — 2D man in an underground bunker with incoming missiles.
+// 0 = empty   1 = trunk   2 = earth   3 = concrete
+// 4 = skin    5 = military-green      6 = leaves   7 = grass
+// Cross-section: forest above, underground bunker with soldier.
+// 13 cols × 12 rows — canopy tapers tip→wide→trunk→grass.
+// Man (rows 8-10) shifts left→center→right across frames.
+const TREE_ROWS = [
+  [0,0,0,6,0,0,0,0,0,6,0,0,0],   // r0  tree tips (narrow)
+  [0,0,6,6,6,0,0,0,6,6,6,0,0],   // r1  mid canopy
+  [0,6,6,6,6,6,0,6,6,6,6,6,0],   // r2  wide canopy base
+  [0,0,6,1,6,0,0,0,6,1,6,0,0],   // r3  canopy narrows to trunk
+  [7,7,7,1,7,7,7,7,7,1,7,7,7],   // r4  grass + trunk base
+  [2,2,2,2,2,2,2,2,2,2,2,2,2],   // r5  earth
+  [2,3,3,3,3,3,3,3,3,3,3,3,2],   // r6  bunker ceiling
+  [2,3,0,0,0,0,0,0,0,0,0,3,2],   // r7  headroom
+];
+const BUNKER_FLOOR = [2,3,3,3,3,3,3,3,3,3,3,3,2];
+
 const FRAMES = [
-  // Frame 0 — missile inbound from above
-  [ [0,0,0,0,0,0,3],[0,1,1,1,0,0,2],[0,4,3,4,0,0,0],[1,3,3,3,1,0,0],[0,3,3,3,0,0,0],[0,2,0,2,0,0,0],[0,1,0,1,0,0,0] ],
-  // Frame 1 — missile closing in on the wall
-  [ [0,0,0,0,0,0,0],[0,1,1,1,0,3,0],[0,4,3,4,0,2,0],[1,3,3,3,1,0,0],[0,3,3,3,0,0,0],[0,2,0,2,0,0,0],[0,1,0,1,0,0,0] ],
-  // Frame 2 — impact against the bunker
-  [ [0,0,0,0,0,0,0],[0,1,1,1,0,0,0],[0,4,3,4,0,0,0],[1,3,3,3,1,3,2],[0,3,3,3,0,2,0],[0,2,0,2,0,0,0],[0,1,0,1,0,0,0] ],
+  // Frame 0 — soldier leans left
+  [
+    ...TREE_ROWS,
+    [2,3,0,0,0,4,0,0,0,0,0,3,2],  // head
+    [2,3,0,0,5,5,5,0,0,0,0,3,2],  // torso
+    [2,3,0,0,5,0,5,0,0,0,0,3,2],  // legs
+    BUNKER_FLOOR,
+  ],
+  // Frame 1 — soldier center
+  [
+    ...TREE_ROWS,
+    [2,3,0,0,0,0,4,0,0,0,0,3,2],
+    [2,3,0,0,0,5,5,5,0,0,0,3,2],
+    [2,3,0,0,0,5,0,5,0,0,0,3,2],
+    BUNKER_FLOOR,
+  ],
+  // Frame 2 — soldier leans right
+  [
+    ...TREE_ROWS,
+    [2,3,0,0,0,0,0,4,0,0,0,3,2],
+    [2,3,0,0,0,0,5,5,5,0,0,3,2],
+    [2,3,0,0,0,0,5,0,5,0,0,3,2],
+    BUNKER_FLOOR,
+  ],
 ];
 
-const PAL_FG = [null, OC.dark, OC.mid, OC.hi, OC.eye];
+const PAL_FG = [null, OC.trunk, OC.dark, OC.concrete, OC.eye, OC.military, OC.leaves, OC.green];
 const rgbNums = (esc) => { const m = esc.match(/38;2;(\d+);(\d+);(\d+)/); return m ? [+m[1],+m[2],+m[3]] : [0,0,0]; };
 
 function renderFrame(fi) {
@@ -73,16 +115,12 @@ async function bootScreen() {
 
   cursor.hide();
 
-  const f0 = renderFrame(0);
+  const f0 = renderFrame(1);
   const HEADER_LINES = [
     '',
     `  ${f0[0]}  ${OC.bright}${name}${RESET}`,
     `  ${f0[1]}  ${OC.muted}${version}${RESET}`,
-    `  ${f0[2]}`,
-    `  ${f0[3]}`,
-    `  ${f0[4]}`,
-    `  ${f0[5]}`,
-    `  ${f0[6]}`,
+    ...f0.slice(2).map(row => `  ${row}`),
     '',
     `  ${OC.dimgfx}${'─'.repeat(54)}${RESET}`,
     '',
@@ -90,19 +128,26 @@ async function bootScreen() {
 
   for (const line of HEADER_LINES) stdout.write(line + '\n');
 
-  const OCTO_ROW_COUNT = 7;
+  const OCTO_ROW_COUNT = f0.length; // 12
   // Lines printed after the last octo row within the header block
   let linesBelow = HEADER_LINES.length - (2 - 1) - OCTO_ROW_COUNT;
 
-  let frameIdx = 0, animDir = 1;
+  let frameIdx = 1, animDir = 1;
 
   function redrawOcto() {
+    // If the terminal isn't tall enough to safely rewind to the animation top,
+    // skip the redraw instead of scribbling over the content below.
+    const termRows = process.stdout.rows || 24;
+    if (linesBelow + OCTO_ROW_COUNT + 1 >= termRows) return;
+
+    cursor.col1();
     cursor.up(linesBelow + OCTO_ROW_COUNT);
     const f = renderFrame(frameIdx);
     stdout.write(`  ${f[0]}  ${OC.bright}${name}${RESET}\n`);
     stdout.write(`  ${f[1]}  ${OC.muted}${version}${RESET}\n`);
     for (let r = 2; r < OCTO_ROW_COUNT; r++) stdout.write(`  ${f[r]}\n`);
     if (linesBelow > 0) stdout.write(`\x1b[${linesBelow}B`);
+    cursor.col1();
   }
 
   const animTimer = setInterval(() => {
@@ -125,7 +170,6 @@ async function bootScreen() {
     let si_idx = 0;
 
     stdout.write(`  ${label} ${OC.muted}${SPIN[0]}${RESET}`);
-    linesBelow++;
 
     const spinTimer = setInterval(() => {
       si_idx = (si_idx + 1) % SPIN.length;
@@ -138,6 +182,7 @@ async function bootScreen() {
     clearInterval(spinTimer);
     cursor.col1(); cursor.clr();
     stdout.write(`  ${label} ${OC.green}${check.ok}${RESET}\n`);
+    linesBelow++;
     await new Promise(r => setTimeout(r, 30));
   }
 
@@ -162,7 +207,7 @@ async function bootScreen() {
 
   // Final static frame
   linesBelow += 2;
-  frameIdx = 0;
+  frameIdx = 1;
   redrawOcto();
 
   stdout.write('\n');
@@ -205,6 +250,8 @@ function header() {
   console.log(chalk.dim('  System resource monitor\n'));
 }
 
+initGame({ header });
+
 // ── Help ──────────────────────────────────────────────────────────────────────
 
 function showHelp() {
@@ -215,6 +262,7 @@ function showHelp() {
 
   console.log(chalk.bold.white('OPTIONS'));
   const opts = [
+    ['/start',      'Begin a zombie survival game session'],
     ['/attack',     'Fight off an active zombie wave'],
     ['/restart',    'Rebuild the bunker after death'],
     ['/all',        'Show all sections'],
@@ -330,214 +378,6 @@ function spinner(label) {
   };
 }
 
-// ── Game state ────────────────────────────────────────────────────────────────
-
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-const WAVE_DURATION_MS = 10000;
-const WAVE_DAMAGE      = 50;
-const WAVE_BREATHER_MS = 4000;
-const FIRST_WAVE_MS    = 5000;
-
-const game = {
-  hp: 100,
-  maxHp: 100,
-  alive: true,
-  atPrompt: false,
-  animating: false,
-  waveActive: false,
-  waveStartedAt: 0,
-  waveCount: 0,
-  survivedWaves: 0,
-  nextWaveAt: 0,
-};
-
-function hpBar() {
-  const width = 10;
-  const filled = Math.round((game.hp / game.maxHp) * width);
-  const color = game.hp > 60 ? chalk.green : game.hp > 30 ? chalk.yellow : chalk.red;
-  return chalk.dim('HP[') + color('█'.repeat(filled)) + chalk.gray('░'.repeat(width - filled)) + chalk.dim(`] ${String(game.hp).padStart(3)}`);
-}
-
-function zombieBar() {
-  const width = 10;
-  const remaining = Math.max(0, WAVE_DURATION_MS - (Date.now() - game.waveStartedAt));
-  const elapsed = WAVE_DURATION_MS - remaining;
-  const filled = Math.min(width, Math.round((elapsed / WAVE_DURATION_MS) * width));
-  const secs = Math.ceil(remaining / 1000);
-  return chalk.red('Z[') + chalk.bold.red('█'.repeat(filled)) + chalk.gray('░'.repeat(width - filled)) + chalk.red(`] ${String(secs).padStart(2)}s`);
-}
-
-function buildPrompt() {
-  if (!game.alive) {
-    return chalk.bold.red('[DEAD] ') + chalk.yellow('restart') + chalk.cyan('> ');
-  }
-  let p = hpBar() + ' ';
-  if (game.waveActive) p += zombieBar() + ' ';
-  p += chalk.bold.green('bunker') + chalk.cyan('> ');
-  return p;
-}
-
-function showPrompt(rl) {
-  rl.setPrompt(buildPrompt());
-  rl.prompt();
-  game.atPrompt = true;
-}
-
-function refreshPrompt(rl) {
-  if (!game.atPrompt || game.animating) return;
-  const buffered = rl.line || '';
-  process.stdout.write('\r\x1b[2K');
-  rl.setPrompt(buildPrompt());
-  rl.prompt(true);
-  if (buffered) process.stdout.write(buffered);
-}
-
-function printAbovePrompt(rl, text) {
-  const buffered = rl.line || '';
-  process.stdout.write('\r\x1b[2K');
-  process.stdout.write(text + '\n');
-  rl.setPrompt(buildPrompt());
-  rl.prompt(true);
-  if (buffered) process.stdout.write(buffered);
-}
-
-function startWave(rl) {
-  game.waveActive = true;
-  game.waveStartedAt = Date.now();
-  game.waveCount++;
-  const msg =
-    '\n' +
-    chalk.bold.red('  ⚠  WARNING: ') + chalk.red(`Zombie wave #${game.waveCount} approaching!`) + '\n' +
-    chalk.dim('     Type ') + chalk.yellow('/attack') + chalk.dim(' before the countdown hits zero.');
-  printAbovePrompt(rl, msg);
-}
-
-async function playArrivalAnimation(rl) {
-  const frames = [
-    [
-      '',
-      chalk.red('       r   r   r      r   r   r'),
-      chalk.dim('     ...shambling at the gates...'),
-    ],
-    [
-      '',
-      chalk.bold.red('     GRRROOOAAAAAAAN...'),
-      chalk.red('     /¯\\  /¯\\  /¯\\  /¯\\'),
-      chalk.red('     |o|  |o|  |o|  |o|'),
-      chalk.red('     /_\\  /_\\  /_\\  /_\\'),
-    ],
-    [
-      '',
-      chalk.bold.red('     *** BANG! BANG! BANG! ***'),
-      chalk.red('     |o||o||o||o|') + chalk.bold.red('  THE HATCH BUCKLES'),
-    ],
-    [
-      '',
-      chalk.bold.red('     >>>  BREACH  <<<  ') + chalk.red('zombies pour in!'),
-      chalk.bold.red('     ✗ ✗ ✗ ✗ ✗ ✗ ✗ ✗'),
-    ],
-  ];
-  for (const f of frames) {
-    printAbovePrompt(rl, f.join('\n'));
-    await sleep(550);
-  }
-}
-
-async function playDeathAnimation(rl) {
-  const fades = [
-    chalk.red('  ...your vision blurs...'),
-    chalk.dim('  ...the bunker grows cold...'),
-    chalk.gray('  ...silence...'),
-  ];
-  for (const line of fades) {
-    printAbovePrompt(rl, line);
-    await sleep(450);
-  }
-  await sleep(350);
-
-  console.clear();
-  console.log();
-  console.log(chalk.bold.red('  ██╗   ██╗ ██████╗ ██╗   ██╗    ██████╗ ██╗███████╗██████╗ '));
-  console.log(chalk.bold.red('  ╚██╗ ██╔╝██╔═══██╗██║   ██║    ██╔══██╗██║██╔════╝██╔══██╗'));
-  console.log(chalk.bold.red('   ╚████╔╝ ██║   ██║██║   ██║    ██║  ██║██║█████╗  ██║  ██║'));
-  console.log(chalk.bold.red('    ╚██╔╝  ██║   ██║██║   ██║    ██║  ██║██║██╔══╝  ██║  ██║'));
-  console.log(chalk.bold.red('     ██║   ╚██████╔╝╚██████╔╝    ██████╔╝██║███████╗██████╔╝'));
-  console.log(chalk.bold.red('     ╚═╝    ╚═════╝  ╚═════╝     ╚═════╝ ╚═╝╚══════╝╚═════╝ '));
-  console.log();
-  console.log(chalk.dim(`  The bunker falls silent. Waves survived: `) + chalk.bold.white(String(game.survivedWaves)));
-  console.log();
-  console.log(chalk.dim('  Type ') + chalk.yellow('/restart') + chalk.dim(' to rebuild the bunker, or ') + chalk.yellow('/exit') + chalk.dim(' to quit.'));
-  console.log();
-}
-
-async function waveArrives(rl) {
-  game.waveActive = false;
-  game.animating = true;
-
-  await playArrivalAnimation(rl);
-
-  game.hp = Math.max(0, game.hp - WAVE_DAMAGE);
-  printAbovePrompt(rl,
-    chalk.bold.red(`  ✗ You took ${WAVE_DAMAGE} damage!  `) +
-    chalk.dim(`HP: ${game.hp}/${game.maxHp}`)
-  );
-
-  if (game.hp <= 0) {
-    await playDeathAnimation(rl);
-    game.alive = false;
-  }
-
-  game.animating = false;
-  game.nextWaveAt = Date.now() + WAVE_BREATHER_MS;
-  refreshPrompt(rl);
-}
-
-function gameTick(rl) {
-  if (!game.alive || game.animating) return;
-  if (!game.atPrompt) return; // pause the clock during command execution
-
-  if (!game.waveActive && Date.now() >= game.nextWaveAt) {
-    startWave(rl);
-    return;
-  }
-  if (game.waveActive) {
-    const remaining = WAVE_DURATION_MS - (Date.now() - game.waveStartedAt);
-    if (remaining <= 0) {
-      waveArrives(rl);
-      return;
-    }
-    refreshPrompt(rl);
-  }
-}
-
-function attackZombies() {
-  if (!game.waveActive) {
-    console.log(chalk.dim('  The perimeter is quiet. No zombies in sight.\n'));
-    return;
-  }
-  game.waveActive = false;
-  game.survivedWaves++;
-  game.nextWaveAt = Date.now() + WAVE_BREATHER_MS;
-  console.log(
-    chalk.bold.green('  ✓ Wave repelled! ') +
-    chalk.dim(`The bunker holds. (waves survived: ${game.survivedWaves})`) + '\n'
-  );
-}
-
-function restartBunker() {
-  game.hp = game.maxHp;
-  game.alive = true;
-  game.waveActive = false;
-  game.waveCount = 0;
-  game.survivedWaves = 0;
-  game.animating = false;
-  game.nextWaveAt = Date.now() + FIRST_WAVE_MS;
-  console.clear();
-  header();
-  console.log(chalk.bold.green('  ✓ Bunker rebuilt. ') + chalk.dim('Health restored. Stand by for the next wave...\n'));
-}
-
 // ── Command handler ───────────────────────────────────────────────────────────
 
 async function runCommand(input) {
@@ -556,8 +396,23 @@ async function runCommand(input) {
     return;
   }
 
+  if (args.includes('start')) {
+    if (game.gameMode && game.alive) {
+      console.log(chalk.dim('  A game session is already in progress.\n'));
+    } else {
+      startGame();
+    }
+    return;
+  }
+
   if (args.includes('restart')) {
-    if (game.alive) {
+    if (!game.gameMode) {
+      console.log(
+        chalk.dim('  No game session to restart. Type ') +
+        chalk.yellow('/start') +
+        chalk.dim(' to begin one.\n')
+      );
+    } else if (game.alive) {
       console.log(chalk.dim('  Bunker is already operational.\n'));
     } else {
       restartBunker();
@@ -565,7 +420,7 @@ async function runCommand(input) {
     return;
   }
 
-  if (!game.alive) {
+  if (game.gameMode && !game.alive) {
     console.log(
       chalk.dim('  You are dead. Type ') +
       chalk.yellow('/restart') +
@@ -575,11 +430,19 @@ async function runCommand(input) {
   }
 
   if (args.includes('attack')) {
-    attackZombies();
+    if (!game.gameMode) {
+      console.log(
+        chalk.dim('  No game in progress. Type ') +
+        chalk.yellow('/start') +
+        chalk.dim(' to begin a zombie survival session.\n')
+      );
+    } else {
+      attackZombies();
+    }
     return;
   }
 
-  const known = ['disk', 'ram', 'cpu', 'gpu', 'io', 'all', 'clear', 'help', 'h', '?', 'exit', 'quit', 'attack', 'restart'];
+  const known = ['disk', 'ram', 'cpu', 'gpu', 'io', 'all', 'clear', 'help', 'h', '?', 'exit', 'quit', 'attack', 'restart', 'start'];
   const unknown = args.filter(a => !known.includes(a));
   if (unknown.length) {
     console.log(chalk.red(`  Unknown command: ${unknown.join(', ')}`));
@@ -612,7 +475,6 @@ function startPrompt() {
     prompt: chalk.bold.green('bunker') + chalk.cyan('> '),
   });
 
-  game.nextWaveAt = Date.now() + FIRST_WAVE_MS;
   showPrompt(rl);
 
   const tickTimer = setInterval(() => gameTick(rl), 500);
