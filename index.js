@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import readline from 'readline';
 import {
   initGame, game,
-  showPrompt, gameTick,
+  showPrompt, gameTick, printAbovePrompt,
   attackZombies, restartBunker, startGame,
 } from './game.js';
 
@@ -40,6 +40,8 @@ const OC = {
   military : rgb( 75, 110,  55),
   leaves   : rgb( 46,  95,  50),
   trunk    : rgb( 80,  45,  20),
+  star     : rgb(255, 255, 210),  // pale warm-white stars
+  moon     : rgb(240, 220, 130),  // soft yellow moon
 };
 
 // 0 = empty   1 = trunk   2 = earth   3 = concrete
@@ -86,11 +88,28 @@ const FRAMES = [
   ],
 ];
 
-const PAL_FG = [null, OC.trunk, OC.dark, OC.concrete, OC.eye, OC.military, OC.leaves, OC.green];
+// 8 = star   9 = moon (crescent)
+// Night sky: empty breathing row, then 2 stars flanking a C-shaped crescent moon.
+// Crescent (C opens right): top-arc cols 6-7, arm col 5, bottom-arc cols 6-7.
+const NIGHT_SKY = [
+  [0,0,0,0,0,0,0,0,0,0,0,0,0],  // r0  empty sky — breathing room
+  [0,8,0,0,0,0,9,9,0,0,0,8,0],  // r1  ★ (col 1)  crescent top  ★ (col 11)
+  [0,0,0,0,0,9,0,0,0,0,0,0,0],  // r2  crescent arm (col 5)
+  [0,0,0,0,0,0,9,9,0,0,0,0,0],  // r3  crescent bottom (cols 6-7)
+  [2,2,2,2,2,2,2,2,2,2,2,2,2],  // r4  dark earth
+];
+
+// Same sky for all 3 frames; only the man position changes (inherited from FRAMES).
+const NIGHT_FRAMES = FRAMES.map(dayFrame => [
+  ...NIGHT_SKY,
+  ...dayFrame.slice(5),   // earth, ceiling, headroom, man, floor (7 rows)
+]);
+
+const PAL_FG = [null, OC.trunk, OC.dark, OC.concrete, OC.eye, OC.military, OC.leaves, OC.green, OC.star, OC.moon];
 const rgbNums = (esc) => { const m = esc.match(/38;2;(\d+);(\d+);(\d+)/); return m ? [+m[1],+m[2],+m[3]] : [0,0,0]; };
 
-function renderFrame(fi) {
-  return FRAMES[fi].map(row => {
+function renderRows(rows) {
+  return rows.map(row => {
     let s = '';
     for (const v of row) {
       if (PAL_FG[v]) {
@@ -103,6 +122,9 @@ function renderFrame(fi) {
     return s;
   });
 }
+
+function renderFrame(fi)      { return renderRows(FRAMES[fi]); }
+function renderNightFrame(fi) { return renderRows(NIGHT_FRAMES[fi]); }
 
 function padLabel(str, len) {
   const visible = str.replace(/\x1b\[[^m]*m/g, '');
@@ -466,6 +488,29 @@ async function runCommand(input) {
   console.log('');
 }
 
+// ── Day / night cycle ─────────────────────────────────────────────────────────
+
+const CYCLE_MS = 20000;   // switch every 20 seconds
+
+function startDayNightCycle(rl) {
+  let isNight = false;
+
+  return setInterval(() => {
+    if (game.animating) return;
+    isNight = !isNight;
+
+    if (isNight) {
+      // Night: show 5 sky rows (empty + stars+moon + earth ground). Clean and minimal.
+      const art = renderNightFrame(1).slice(0, 5).map(r => '  ' + r).join('\n');
+      printAbovePrompt(rl, `  ${OC.muted}— night falls —${RESET}\n` + art);
+    } else {
+      // Day: show the full original 12-row animation art (trees + bunker + man).
+      const art = renderFrame(1).map(r => '  ' + r).join('\n');
+      printAbovePrompt(rl, `  ${OC.muted}— dawn breaks —${RESET}\n` + art);
+    }
+  }, CYCLE_MS);
+}
+
 // ── Interactive prompt ────────────────────────────────────────────────────────
 
 function startPrompt() {
@@ -477,7 +522,8 @@ function startPrompt() {
 
   showPrompt(rl);
 
-  const tickTimer = setInterval(() => gameTick(rl), 500);
+  const tickTimer  = setInterval(() => gameTick(rl), 500);
+  const cycleTimer = startDayNightCycle(rl);
 
   rl.on('line', async (line) => {
     game.atPrompt = false;
@@ -486,6 +532,7 @@ function startPrompt() {
     const cmd = input.toLowerCase();
     if (cmd === '/exit' || cmd === '/quit' || cmd === 'exit' || cmd === 'quit') {
       clearInterval(tickTimer);
+      clearInterval(cycleTimer);
       console.log(chalk.dim('\n  Goodbye!\n'));
       process.exit(0);
     }
@@ -501,6 +548,7 @@ function startPrompt() {
 
   rl.on('close', () => {
     clearInterval(tickTimer);
+    clearInterval(cycleTimer);
     process.exit(0);
   });
 }
