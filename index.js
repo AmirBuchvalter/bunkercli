@@ -2,10 +2,12 @@
 import si from 'systeminformation';
 import chalk from 'chalk';
 import readline from 'readline';
+import { showManual } from './manual.js';
 import {
   initGame, game,
   showPrompt, gameTick, printAbovePrompt,
   attackZombies, restartBunker, startGame,
+  togglePowerSave, manualWatercycle,
 } from './game.js';
 
 const { stdout } = process;
@@ -285,7 +287,9 @@ function showHelp() {
   console.log(chalk.bold.white('OPTIONS'));
   const opts = [
     ['/start',      'Begin a zombie survival game session'],
-    ['/attack',     'Fight off an active zombie wave'],
+    ['/attack',     'Fight off an active zombie wave (-20% battery)'],
+    ['/watercycle', 'Run the watercycle loop manually (-20% battery)'],
+    ['/powersave',  'Toggle power-saving mode (lower defences)'],
     ['/restart',    'Rebuild the bunker after death'],
     ['/all',        'Show all sections'],
     ['/disk',       'Show disk usage only'],
@@ -422,6 +426,7 @@ async function runCommand(input) {
     if (game.gameMode && game.alive) {
       console.log(chalk.dim('  A game session is already in progress.\n'));
     } else {
+      await bootScreen();
       startGame();
     }
     return;
@@ -464,7 +469,25 @@ async function runCommand(input) {
     return;
   }
 
-  const known = ['disk', 'ram', 'cpu', 'gpu', 'io', 'all', 'clear', 'help', 'h', '?', 'exit', 'quit', 'attack', 'restart', 'start'];
+  if (args.includes('watercycle')) {
+    if (!game.gameMode) {
+      console.log(chalk.dim('  No game in progress. Type ') + chalk.yellow('/start') + chalk.dim(' first.\n'));
+    } else {
+      manualWatercycle();
+    }
+    return;
+  }
+
+  if (args.includes('powersave')) {
+    if (!game.gameMode) {
+      console.log(chalk.dim('  No game in progress. Type ') + chalk.yellow('/start') + chalk.dim(' first.\n'));
+    } else {
+      togglePowerSave();
+    }
+    return;
+  }
+
+  const known = ['disk', 'ram', 'cpu', 'gpu', 'io', 'all', 'clear', 'help', 'h', '?', 'exit', 'quit', 'attack', 'restart', 'start', 'watercycle', 'powersave'];
   const unknown = args.filter(a => !known.includes(a));
   if (unknown.length) {
     console.log(chalk.red(`  Unknown command: ${unknown.join(', ')}`));
@@ -490,23 +513,20 @@ async function runCommand(input) {
 
 // ── Day / night cycle ─────────────────────────────────────────────────────────
 
-const CYCLE_MS = 20000;   // switch every 20 seconds
+const CYCLE_MS = 5 * 60 * 1000;   // switch every 5 minutes
 
 function startDayNightCycle(rl) {
-  let isNight = false;
-
   return setInterval(() => {
     if (game.animating) return;
-    isNight = !isNight;
+    if (!game.gameMode || !game.alive) return;  // only cycle while a live game is running
+    game.isNight = !game.isNight;
 
-    if (isNight) {
-      // Night: show 5 sky rows (empty + stars+moon + earth ground). Clean and minimal.
+    if (game.isNight) {
       const art = renderNightFrame(1).slice(0, 5).map(r => '  ' + r).join('\n');
-      printAbovePrompt(rl, `  ${OC.muted}— night falls —${RESET}\n` + art);
+      printAbovePrompt(rl, `  ${OC.muted}— night falls — auto-defence online —${RESET}\n` + art);
     } else {
-      // Day: show the full original 12-row animation art (trees + bunker + man).
       const art = renderFrame(1).map(r => '  ' + r).join('\n');
-      printAbovePrompt(rl, `  ${OC.muted}— dawn breaks —${RESET}\n` + art);
+      printAbovePrompt(rl, `  ${OC.muted}— dawn breaks — solar receivers active —${RESET}\n` + art);
     }
   }, CYCLE_MS);
 }
@@ -555,5 +575,6 @@ function startPrompt() {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-await bootScreen();
+header();
+showManual();
 startPrompt();
