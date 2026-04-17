@@ -9,79 +9,59 @@
   ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝
 ```
 
-A colorful, interactive terminal tool for monitoring your system resources in real time — disk, RAM, CPU, GPU, and I/O — built with Node.js.
+An interactive terminal survival game + system monitor. Defend your underground bunker from zombie waves, manage power and chores, receive radio transmissions, and deal with visitors — all while keeping an eye on your real CPU, RAM, disk, and GPU.
 
 ---
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) v18 or higher
+- [Node.js](https://nodejs.org/) **v18 or higher**
 
-To check if Node.js is already installed:
+Check your version:
 
 ```bash
 node --version
 ```
 
-If not installed, download it from [nodejs.org](https://nodejs.org/) and run the installer.
+If not installed, download from [nodejs.org](https://nodejs.org/).
 
 ---
 
 ## Installation
 
-### 1. Clone the repository
-
 ```bash
 git clone https://github.com/your-username/bunkercli.git
 cd bunkercli
-```
-
-### 2. Install dependencies
-
-```bash
 npm install
 ```
 
-This installs the following libraries:
+`npm install` reads `package.json` and installs all dependencies locally into `node_modules/`. That folder is git-ignored — you never need to commit it.
 
-| Library | Version | Purpose |
-|---|---|---|
-| [`systeminformation`](https://www.npmjs.com/package/systeminformation) | ^5.x | Reads CPU, RAM, disk, GPU, and I/O stats from the OS |
-| [`chalk`](https://www.npmjs.com/package/chalk) | ^5.x | Colorful terminal output |
+### Dependencies
 
-> `readline` is built into Node.js — no installation needed.
+| Package | Purpose |
+|---|---|
+| [`chalk`](https://www.npmjs.com/package/chalk) ^5.x | Coloured terminal output |
+| [`systeminformation`](https://www.npmjs.com/package/systeminformation) ^5.x | Reads CPU, RAM, disk, GPU, I/O from the OS |
+
+`readline` is built into Node.js — no extra install needed.
 
 ---
 
-## Running BunkerCLI
+## Running
 
 ```bash
 node index.js
 ```
 
-This opens the interactive prompt:
-
-```
-bunker>
-```
-
 ### Install as a global command (optional)
 
-To run `bunker` from anywhere on your system:
-
 ```bash
-npm link
+npm link        # run once (Windows: use an Admin terminal)
+bunker          # then launch from anywhere
 ```
 
-> On Windows, run your terminal as **Administrator** for this to work.
-
-Then launch from anywhere:
-
-```bash
-bunker
-```
-
-To uninstall the global command:
+To uninstall:
 
 ```bash
 npm unlink -g clitool
@@ -89,52 +69,61 @@ npm unlink -g clitool
 
 ---
 
-## Commands
-
-All commands work with or without the `/` prefix.
-
-| Command | Alias | Description |
-|---|---|---|
-| `all` | `/all` | Show all sections |
-| `disk` | `/disk` | Disk usage per drive |
-| `ram` | `/ram` | RAM usage |
-| `cpu` | `/cpu` | CPU load per core |
-| `gpu` | `/gpu` | GPU load and VRAM |
-| `io` | `/io` | Disk read/write speed |
-| `clear` | `/clear` | Clear the screen |
-| `help` | `/help` | Show help |
-| `exit` | `/exit` | Quit BunkerCLI |
-
-You can also combine commands:
+## Quick start
 
 ```
-bunker> ram gpu
-bunker> /disk /cpu
+bunker> /start     ← seal the hatches and begin the survival session
+bunker> /help      ← see all available commands
+bunker> /exit      ← quit
 ```
 
 ---
 
-## Color Guide
+## Survival commands
 
-Progress bars change color based on usage:
+| Command | Description |
+|---|---|
+| `/start` | Begin a survival session |
+| `/attack` | Fight off an active zombie wave (−20% battery) |
+| `/powersave` | Power-save mode for 60 s — pauses chores and wave countdown |
+| `/detonate` | Last resort during blackout — 50 % chance of survival |
+| `/restart` | Rebuild the bunker after death |
 
-| Color | Range | Status |
+### Chores (keep the bunker running)
+
+| Command | Cost | Description |
 |---|---|---|
-| Green | 0% – 60% | Normal |
-| Yellow | 60% – 85% | Moderate |
-| Red | 85%+ | High |
+| `/watercycle` | −20% | Water recycling loop — skipping causes HP loss |
+| `/sweep` | −8% | Clear bunker debris |
+| `/plants` | −6% | Water the plants |
+| `/vents` | −10% | Wash the air vents |
+
+### Visitors
+
+| Command | Description |
+|---|---|
+| `/admit` | Let the visitor at the hatch inside |
+| `/turnaway` | Send them away |
+| `/talk` | Re-open conversation with a guest who refused to leave |
+| `1` / `2` / `3` | Choose a response during conversation |
+
+### System info
+
+| Command | Description |
+|---|---|
+| `/all` | Show all sections |
+| `/cpu` `/ram` `/disk` `/gpu` `/io` | Show individual sections |
+| `/clear` | Clear the screen |
+| `/help` | Full command reference |
 
 ---
 
-## Disk I/O — Admin note
+## Battery & power
 
-On **Windows**, Disk I/O stats require elevated privileges. If you see:
-
-```
-No disk I/O data available (try running as admin)
-```
-
-Run your terminal as Administrator and try again.
+- Battery drains **−10% every 30 seconds** at all times.
+- During **daytime** ☀, solar panels recharge the battery (~7.5%/30 s) — but drain still exceeds gain, so manage carefully.
+- At **night** ☽, no solar. Drain is full −10%/30 s.
+- **Blackout** (battery = 0): guards offline, hatch unsecured — zombies breach instantly, strangers walk in without knocking. Use `/detonate` as a last resort.
 
 ---
 
@@ -142,11 +131,33 @@ Run your terminal as Administrator and try again.
 
 ```
 bunkercli/
-├── index.js        # Main entry point
-├── package.json    # Project config and dependencies
-├── README.md       # This file
-└── USER_GUIDE.md   # Detailed user guide
+├── index.js              # Entry point, boot animation, CLI routing
+├── game.js               # Core game state, prompt, physics tick
+├── manual.js             # Startup briefing
+├── package.json          # Dependencies (run npm install)
+├── managers/
+│   ├── zombieManager.js  # Wave scheduling and combat
+│   ├── npcManager.js     # Visitor lifecycle
+│   ├── chatManager.js    # Conversation engine
+│   ├── eventManager.js   # Weather, radio, front-line reports
+│   └── choreManager.js   # Chore timers and auto-runs
+└── data/
+    ├── chats.json         # NPC dialogue trees
+    └── events.json        # Weather, radio, and front-line event text
 ```
-Example:
-<img width="601" height="684" alt="bunkercli" src="https://github.com/user-attachments/assets/134e5d5b-67d8-45a9-a212-7c98b8536039" />
 
+---
+
+## Disk I/O — Windows note
+
+Disk I/O stats require elevated privileges on Windows. If you see:
+
+```
+No disk I/O data available (try running as admin)
+```
+
+Run your terminal as **Administrator** and try again.
+
+---
+
+<img width="601" height="684" alt="bunkercli" src="https://github.com/user-attachments/assets/134e5d5b-67d8-45a9-a212-7c98b8536039" />
