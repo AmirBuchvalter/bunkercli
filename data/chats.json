@@ -1,0 +1,264 @@
+{
+  "npcs": [
+    {
+      "id": "marcus",
+      "name": "Marcus",
+      "title": "a weary drifter",
+      "arrivalLine": "A tired man in a torn coat taps three times on the hatch.",
+      "atDoorLine": "\"Please... I've been walking for days. I just need a few hours of rest.\"",
+      "entryNodeId": "intro",
+      "dryingUpRate": { "water": 1.2, "battery": 0.6 },
+      "nodes": {
+        "intro": {
+          "text": "Marcus settles onto the floor, rubbing his hands. \"Thank you. It's been weeks out there. Is this place safe?\"",
+          "choices": [
+            { "text": "Safe enough. What's your name, stranger?", "next": "name" },
+            { "text": "We manage. Where did you come from?", "next": "origin" },
+            { "text": "Don't get comfortable. I may ask you to leave.", "next": "warn" }
+          ]
+        },
+        "name": {
+          "text": "\"Marcus. I used to repair radios before the cities fell. If you've got a receiver, I might be able to pull signals.\"",
+          "choices": [
+            { "text": "We have one. You could take a look later.", "next": "radio" },
+            { "text": "We don't trust broadcasts anymore.", "next": "quiet" },
+            { "text": "I think it's time you moved on.", "next": "askleave" }
+          ]
+        },
+        "origin": {
+          "text": "\"The old highway. Walked past burning cars and empty towns. Saw things I don't want to describe.\"",
+          "choices": [
+            { "text": "Did you see any survivors?", "next": "survivors" },
+            { "text": "How close are the swarms now?", "next": "swarms" },
+            { "text": "Enough talk. You need to go.", "next": "askleave" }
+          ]
+        },
+        "warn": {
+          "text": "Marcus nods slowly. \"Understood. I'll take whatever time you can give.\"",
+          "choices": [
+            { "text": "Tell me who you are, then.", "next": "name" },
+            { "text": "Where did you come from?", "next": "origin" },
+            { "text": "Actually — go. Now.", "next": "askleave" }
+          ]
+        },
+        "radio": {
+          "text": "\"A working radio in these times is a miracle. I owe you one for letting me listen.\"",
+          "choices": [
+            { "text": "Just don't touch anything without asking.", "next": "trust" },
+            { "text": "You can listen. Nothing more.", "next": "quiet" },
+            { "text": "On second thought, it's time for you to go.", "next": "askleave" }
+          ]
+        },
+        "quiet": {
+          "text": "\"Fair enough. Silence is safer anyway.\" He rests his head against the wall.",
+          "choices": [
+            { "text": "Get some sleep. We'll talk later.", "next": "sleep" },
+            { "text": "Actually — I'd prefer you left.", "next": "askleave" },
+            { "text": "Tell me how you survived out there.", "next": "origin" }
+          ]
+        },
+        "survivors": {
+          "text": "\"A few. Most are hiding in basements or attics. Some banded together — not all of them are friendly.\"",
+          "choices": [
+            { "text": "Did any of them follow you here?", "next": "swarms" },
+            { "text": "We should trade with the friendly ones.", "next": "trust" },
+            { "text": "That's enough. You need to leave.", "next": "askleave" }
+          ]
+        },
+        "swarms": {
+          "text": "\"Close. A few miles west. The night draws them out — stay quiet and you'll be fine.\"",
+          "choices": [
+            { "text": "Thanks for the warning.", "next": "trust" },
+            { "text": "How do you know so much?", "next": "name" },
+            { "text": "You've outstayed your welcome.", "next": "askleave" }
+          ]
+        },
+        "trust": {
+          "text": "Marcus gives a small, tired smile. \"I appreciate the trust. I won't abuse it.\"",
+          "choices": [
+            { "text": "Rest now. We'll sort things out tomorrow.", "next": "sleep" },
+            { "text": "Tell me more about what's out there.", "next": "origin" },
+            { "text": "Actually — I need you to go.", "next": "askleave" }
+          ]
+        },
+        "sleep": {
+          "text": "Marcus closes his eyes. For a moment the bunker feels a little less alone.",
+          "choices": [
+            { "text": "Watch him quietly.", "next": "trust" },
+            { "text": "Wake him. He needs to leave.", "next": "askleave" },
+            { "text": "Let him rest. Return to your duties.", "next": "sleep" }
+          ]
+        },
+        "askleave": {
+          "text": "You ask Marcus to leave. He looks at you for a long moment. \"After everything? Please — let me explain myself first.\"",
+          "isLeaveNode": true,
+          "choices": [
+            { "text": "I'm sorry. Our supplies are thin and I have to protect this place. Please go peacefully.", "result": "leaves" },
+            { "text": "Get out. I'm done being polite.", "result": "stays" },
+            { "text": "Maybe just one more night?", "result": "stays" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "nora",
+      "name": "Nora",
+      "title": "a sharp-eyed scavenger",
+      "arrivalLine": "A short woman with a dusty backpack raps on the hatch.",
+      "atDoorLine": "\"I can trade — batteries, filters, anything. Just let me in before the light goes.\"",
+      "entryNodeId": "intro",
+      "dryingUpRate": { "water": 0.8, "battery": 1.1 },
+      "nodes": {
+        "intro": {
+          "text": "Nora sets her pack down carefully. \"Thanks. Nice setup you have here. Secure too.\"",
+          "choices": [
+            { "text": "What do you have to trade?", "next": "trade" },
+            { "text": "Where did you find all this?", "next": "origin" },
+            { "text": "I'm keeping my distance. Don't get comfortable.", "next": "warn" }
+          ]
+        },
+        "trade": {
+          "text": "\"Mostly salvage. Lithium cells, water filters, some canned goods. You help me, I help you.\"",
+          "choices": [
+            { "text": "Show me the cells.", "next": "deal" },
+            { "text": "We're self-sufficient. Thanks.", "next": "quiet" },
+            { "text": "Actually — I'd rather you moved on.", "next": "askleave" }
+          ]
+        },
+        "origin": {
+          "text": "\"Old pharmacy, two towns over. Didn't meet anything living on the way in. Didn't meet anything dead, either.\"",
+          "choices": [
+            { "text": "Any rumors of what's out there?", "next": "rumors" },
+            { "text": "Show me what you have to trade.", "next": "trade" },
+            { "text": "You should go.", "next": "askleave" }
+          ]
+        },
+        "warn": {
+          "text": "\"Fair enough. I've been kicked out of worse places. I'll behave.\"",
+          "choices": [
+            { "text": "Let's start with what you have.", "next": "trade" },
+            { "text": "Tell me where you've been.", "next": "origin" },
+            { "text": "On second thought — go now.", "next": "askleave" }
+          ]
+        },
+        "deal": {
+          "text": "She unrolls a cloth — two charged cells, a pack of filters, a roll of copper wire. Honest pricing.",
+          "choices": [
+            { "text": "Good. Let's work out an exchange.", "next": "quiet" },
+            { "text": "I'll think about it.", "next": "rumors" },
+            { "text": "Not interested. Please go.", "next": "askleave" }
+          ]
+        },
+        "quiet": {
+          "text": "\"Alright. I'll keep out of your way. Wake me if anything goes wrong.\"",
+          "choices": [
+            { "text": "Rest up.", "next": "rest" },
+            { "text": "What have you been hearing on the roads?", "next": "rumors" },
+            { "text": "Actually — I need you to leave.", "next": "askleave" }
+          ]
+        },
+        "rumors": {
+          "text": "\"Some say the swarms aren't just zombies anymore. Lights in the sky. Broken machines moving on their own. I try not to listen.\"",
+          "choices": [
+            { "text": "That's a lot to take in.", "next": "rest" },
+            { "text": "We'll watch the skies tonight.", "next": "quiet" },
+            { "text": "Enough stories. Please leave.", "next": "askleave" }
+          ]
+        },
+        "rest": {
+          "text": "Nora nods off against her pack. Even asleep she keeps one hand on the strap.",
+          "choices": [
+            { "text": "Let her sleep.", "next": "rest" },
+            { "text": "Wake her. She has to leave.", "next": "askleave" },
+            { "text": "Check her pack quietly.", "next": "warn" }
+          ]
+        },
+        "askleave": {
+          "text": "You tell Nora it's time to move on. She raises an eyebrow. \"You sure about that? I'm useful to have around.\"",
+          "isLeaveNode": true,
+          "choices": [
+            { "text": "I appreciate what you brought, but this bunker can't support two. Travel safe.", "result": "leaves" },
+            { "text": "Out. Before I regret letting you in.", "result": "stays" },
+            { "text": "Just... stay out of my way, then.", "result": "stays" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "elias",
+      "name": "Elias",
+      "title": "a soft-spoken medic",
+      "arrivalLine": "An older man in a faded red cross jacket calls out from above the hatch.",
+      "atDoorLine": "\"I'm a medic. I can patch wounds, stitches, antibiotics — I just need somewhere to rest.\"",
+      "entryNodeId": "intro",
+      "dryingUpRate": { "water": 0.5, "battery": 0.9 },
+      "nodes": {
+        "intro": {
+          "text": "Elias breathes out slowly as the hatch seals. \"It's quiet in here. Thank you for the kindness.\"",
+          "choices": [
+            { "text": "You said you're a medic?", "next": "medic" },
+            { "text": "Where did you walk from?", "next": "origin" },
+            { "text": "You can stay briefly — that's it.", "next": "warn" }
+          ]
+        },
+        "medic": {
+          "text": "\"Thirty-seven years of field work. Most of it before the outbreak. I don't charge, if that's what you're wondering.\"",
+          "choices": [
+            { "text": "We're lucky you found us.", "next": "kind" },
+            { "text": "Have you treated anyone infected?", "next": "infected" },
+            { "text": "You'll still need to move on soon.", "next": "askleave" }
+          ]
+        },
+        "origin": {
+          "text": "\"There was a clinic north of here. Overrun two nights ago. I got the children out, but not much else.\"",
+          "choices": [
+            { "text": "Where are they now?", "next": "kind" },
+            { "text": "Any of them infected?", "next": "infected" },
+            { "text": "I'm sorry. But you need to keep going.", "next": "askleave" }
+          ]
+        },
+        "warn": {
+          "text": "\"I understand completely. Safety first. I'll only take what I need.\"",
+          "choices": [
+            { "text": "Tell me about yourself.", "next": "medic" },
+            { "text": "Where are you headed?", "next": "origin" },
+            { "text": "Actually — leave now.", "next": "askleave" }
+          ]
+        },
+        "kind": {
+          "text": "\"You remind me why I kept the jacket on. Kindness is still out here. It's quieter, but it's here.\"",
+          "choices": [
+            { "text": "Rest, then. We'll talk tomorrow.", "next": "rest" },
+            { "text": "Tell me what else you've seen.", "next": "origin" },
+            { "text": "I have to ask you to leave.", "next": "askleave" }
+          ]
+        },
+        "infected": {
+          "text": "\"The early stages look like flu. By the time the bite shows, it's too late. If anyone here shows symptoms, I can help.\"",
+          "choices": [
+            { "text": "Hopefully we never need that.", "next": "kind" },
+            { "text": "We'll keep an eye on it.", "next": "rest" },
+            { "text": "Please — it's time for you to go.", "next": "askleave" }
+          ]
+        },
+        "rest": {
+          "text": "Elias folds his jacket into a pillow and lays his head down. He falls asleep instantly.",
+          "choices": [
+            { "text": "Let him rest.", "next": "rest" },
+            { "text": "Wake him. He needs to leave.", "next": "askleave" },
+            { "text": "Sit with him for a while.", "next": "kind" }
+          ]
+        },
+        "askleave": {
+          "text": "You tell Elias it's time. He stands without protest, but his eyes are sad. \"Is there anything I can say to change your mind?\"",
+          "isLeaveNode": true,
+          "choices": [
+            { "text": "I truly wish you safety. Take this water for the road — please go.", "result": "leaves" },
+            { "text": "No. Leave. Don't come back.", "result": "stays" },
+            { "text": "I don't know. Maybe one more day?", "result": "stays" }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "weather": [
+    { "text": "A soft rain begins to patter on the bunker roof.",        "solarMultiplier": 0.5, "durationMs": 90000 },
+    { "text": "The wind picks up — a storm is rolling in from the east.", "solarMultiplier": 0.3, "durationMs": 120000 },
+    { "text": "Heavy clouds settle overhead. The daylight dims.",         "solarMultiplier": 0.6, "durationMs": 80000 },
+    { "text": "A hurricane warning crackles across the emergency band.",  "solarMultiplier": 0.2, "durationMs": 150000 },
+    { "text": "The sky clears. Sunlight pours onto the solar receivers.", "solarMultiplier": 1.3, "durationMs": 120000 },
+    { "text": "A light fog rolls in, muffling the world above.",          "solarMultiplier": 0.8, "durationMs": 60000 },
+    { "text": "Hail taps against the steel plates overhead.",             "solarMultiplier": 0.4, "durationMs": 70000 },
+    { "text": "The air turns crisp and still. A quiet afternoon.",        "solarMultiplier": 1.1, "durationMs": 80000 }
+  ],
+  "radio": [
+    "📻 ...to any station listening, this is Outpost-Seven. We are holding. Repeat: holding...",
+    "📻 ...scattered broadcasts from the coast — a convoy of survivors moving north along Route 9...",
+    "📻 ...static...  'please... if anyone hears this... we are at the old grain silo'  ...static...",
+    "📻 ...anonymous voice: 'stay underground tonight. do not look up at the sky.'",
+    "📻 ...a children's choir, impossibly clean. Then cut to static mid-verse.",
+    "📻 ...numbers station cycles through: seven — four — seven — fourteen — ninety-one — seven...",
+    "📻 ...old jazz record loops endlessly on an abandoned frequency.",
+    "📻 ...'this is Dr. Hale. the vaccine trial data is at coordinates'  ...signal lost..."
+  ],
+  "front": [
+    { "text": "📡 Front report: zombie swarms regrouping near the river crossings. Quiet tonight.",         "enemy": "zombies" },
+    { "text": "📡 Front report: shambler activity down 40% since the cold snap began.",                     "enemy": "zombies" },
+    { "text": "📡 Unverified sighting: lights in the sky, moving against the wind, two valleys over.",       "enemy": "aliens" },
+    { "text": "📡 A scout reports symbols burned into crop fields — perfect circles, clean edges.",         "enemy": "aliens" },
+    { "text": "📡 Militia channel warns of mindless humans roaming — no hostility, no speech, just walking.","enemy": "mindless" },
+    { "text": "📡 A man was found at a checkpoint this morning, humming. He could not stop humming.",       "enemy": "mindless" },
+    { "text": "📡 Salvage team encountered ambulatory machines — origin unknown. They did not respond.",    "enemy": "robots" },
+    { "text": "📡 Industrial drones spotted drifting past the treeline, blue status lights flashing.",       "enemy": "robots" },
+    { "text": "📡 Medical net flags a new cough in the northern settlements. Origin unclear.",              "enemy": "disease" },
+    { "text": "📡 Three outposts quarantined overnight. No transmissions since the seal.",                   "enemy": "disease" }
+  ],
+  "ambient": [
+    "A slow drip finds its way into the floor drain. It's soothing, somehow.",
+    "The ventilation hums a single, steady note.",
+    "Dust drifts through the reading light above the workbench.",
+    "You log the day's entry in the margin of an old notebook.",
+    "Somewhere in the shelves, a paperback slips sideways and settles.",
+    "The bunker creaks as the earth above shifts."
+  ]
+}
