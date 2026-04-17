@@ -6,9 +6,12 @@ import { showManual } from './manual.js';
 import {
   initGame, game,
   showPrompt, gameTick, printAbovePrompt,
-  attackZombies, restartBunker, startGame,
-  togglePowerSave, manualWatercycle,
+  restartBunker, startGame, togglePowerSave, detonate,
 } from './game.js';
+import * as zombies from './managers/zombieManager.js';
+import * as chores  from './managers/choreManager.js';
+import * as npcs    from './managers/npcManager.js';
+import * as chat    from './managers/chatManager.js';
 
 const { stdout } = process;
 const BAR_WIDTH = 30;
@@ -42,37 +45,29 @@ const OC = {
   military : rgb( 75, 110,  55),
   leaves   : rgb( 46,  95,  50),
   trunk    : rgb( 80,  45,  20),
-  star     : rgb(255, 255, 210),  // pale warm-white stars
-  moon     : rgb(240, 220, 130),  // soft yellow moon
 };
 
-// 0 = empty   1 = trunk   2 = earth   3 = concrete
-// 4 = skin    5 = military-green      6 = leaves   7 = grass
-// Cross-section: forest above, underground bunker with soldier.
-// 13 cols × 12 rows — canopy tapers tip→wide→trunk→grass.
-// Man (rows 8-10) shifts left→center→right across frames.
+// Day frames only. Night is represented in the prompt by the ☽ icon.
 const TREE_ROWS = [
-  [0,0,0,6,0,0,0,0,0,6,0,0,0],   // r0  tree tips (narrow)
-  [0,0,6,6,6,0,0,0,6,6,6,0,0],   // r1  mid canopy
-  [0,6,6,6,6,6,0,6,6,6,6,6,0],   // r2  wide canopy base
-  [0,0,6,1,6,0,0,0,6,1,6,0,0],   // r3  canopy narrows to trunk
-  [7,7,7,1,7,7,7,7,7,1,7,7,7],   // r4  grass + trunk base
-  [2,2,2,2,2,2,2,2,2,2,2,2,2],   // r5  earth
-  [2,3,3,3,3,3,3,3,3,3,3,3,2],   // r6  bunker ceiling
-  [2,3,0,0,0,0,0,0,0,0,0,3,2],   // r7  headroom
+  [0,0,0,6,0,0,0,0,0,6,0,0,0],
+  [0,0,6,6,6,0,0,0,6,6,6,0,0],
+  [0,6,6,6,6,6,0,6,6,6,6,6,0],
+  [0,0,6,1,6,0,0,0,6,1,6,0,0],
+  [7,7,7,1,7,7,7,7,7,1,7,7,7],
+  [2,2,2,2,2,2,2,2,2,2,2,2,2],
+  [2,3,3,3,3,3,3,3,3,3,3,3,2],
+  [2,3,0,0,0,0,0,0,0,0,0,3,2],
 ];
 const BUNKER_FLOOR = [2,3,3,3,3,3,3,3,3,3,3,3,2];
 
 const FRAMES = [
-  // Frame 0 — soldier leans left
   [
     ...TREE_ROWS,
-    [2,3,0,0,0,4,0,0,0,0,0,3,2],  // head
-    [2,3,0,0,5,5,5,0,0,0,0,3,2],  // torso
-    [2,3,0,0,5,0,5,0,0,0,0,3,2],  // legs
+    [2,3,0,0,0,4,0,0,0,0,0,3,2],
+    [2,3,0,0,5,5,5,0,0,0,0,3,2],
+    [2,3,0,0,5,0,5,0,0,0,0,3,2],
     BUNKER_FLOOR,
   ],
-  // Frame 1 — soldier center
   [
     ...TREE_ROWS,
     [2,3,0,0,0,0,4,0,0,0,0,3,2],
@@ -80,7 +75,6 @@ const FRAMES = [
     [2,3,0,0,0,5,0,5,0,0,0,3,2],
     BUNKER_FLOOR,
   ],
-  // Frame 2 — soldier leans right
   [
     ...TREE_ROWS,
     [2,3,0,0,0,0,0,4,0,0,0,3,2],
@@ -90,24 +84,7 @@ const FRAMES = [
   ],
 ];
 
-// 8 = star   9 = moon (crescent)
-// Night sky: empty breathing row, then 2 stars flanking a C-shaped crescent moon.
-// Crescent (C opens right): top-arc cols 6-7, arm col 5, bottom-arc cols 6-7.
-const NIGHT_SKY = [
-  [0,0,0,0,0,0,0,0,0,0,0,0,0],  // r0  empty sky — breathing room
-  [0,8,0,0,0,0,9,9,0,0,0,8,0],  // r1  ★ (col 1)  crescent top  ★ (col 11)
-  [0,0,0,0,0,9,0,0,0,0,0,0,0],  // r2  crescent arm (col 5)
-  [0,0,0,0,0,0,9,9,0,0,0,0,0],  // r3  crescent bottom (cols 6-7)
-  [2,2,2,2,2,2,2,2,2,2,2,2,2],  // r4  dark earth
-];
-
-// Same sky for all 3 frames; only the man position changes (inherited from FRAMES).
-const NIGHT_FRAMES = FRAMES.map(dayFrame => [
-  ...NIGHT_SKY,
-  ...dayFrame.slice(5),   // earth, ceiling, headroom, man, floor (7 rows)
-]);
-
-const PAL_FG = [null, OC.trunk, OC.dark, OC.concrete, OC.eye, OC.military, OC.leaves, OC.green, OC.star, OC.moon];
+const PAL_FG = [null, OC.trunk, OC.dark, OC.concrete, OC.eye, OC.military, OC.leaves, OC.green];
 const rgbNums = (esc) => { const m = esc.match(/38;2;(\d+);(\d+);(\d+)/); return m ? [+m[1],+m[2],+m[3]] : [0,0,0]; };
 
 function renderRows(rows) {
@@ -125,8 +102,7 @@ function renderRows(rows) {
   });
 }
 
-function renderFrame(fi)      { return renderRows(FRAMES[fi]); }
-function renderNightFrame(fi) { return renderRows(NIGHT_FRAMES[fi]); }
+function renderFrame(fi) { return renderRows(FRAMES[fi]); }
 
 function padLabel(str, len) {
   const visible = str.replace(/\x1b\[[^m]*m/g, '');
@@ -135,7 +111,7 @@ function padLabel(str, len) {
 
 async function bootScreen() {
   const name    = 'BunkerCLI';
-  const version = 'v1.0.0';
+  const version = 'v1.1.0';
 
   cursor.hide();
 
@@ -152,15 +128,12 @@ async function bootScreen() {
 
   for (const line of HEADER_LINES) stdout.write(line + '\n');
 
-  const OCTO_ROW_COUNT = f0.length; // 12
-  // Lines printed after the last octo row within the header block
+  const OCTO_ROW_COUNT = f0.length;
   let linesBelow = HEADER_LINES.length - (2 - 1) - OCTO_ROW_COUNT;
 
   let frameIdx = 1, animDir = 1;
 
   function redrawOcto() {
-    // If the terminal isn't tall enough to safely rewind to the animation top,
-    // skip the redraw instead of scribbling over the content below.
     const termRows = process.stdout.rows || 24;
     if (linesBelow + OCTO_ROW_COUNT + 1 >= termRows) return;
 
@@ -185,8 +158,8 @@ async function bootScreen() {
 
   const checks = [
     { label: 'Sealing bunker hatches', delay: 400, ok: '✓ sealed' },
-    { label: 'Loading ammunition',     delay: 350, ok: '✓ loaded' },
-    { label: 'Scanning perimeter',     delay: 380, ok: '✓ clear'  },
+    { label: 'Warming solar panels',   delay: 350, ok: '✓ online' },
+    { label: 'Tuning the old radio',   delay: 380, ok: '✓ clear'  },
   ];
 
   for (const check of checks) {
@@ -212,7 +185,6 @@ async function bootScreen() {
 
   clearInterval(animTimer);
 
-  // Progress bar
   stdout.write('\n');
   linesBelow++;
   const barLabel = `  ${OC.muted}Initializing runtime${RESET}`;
@@ -229,7 +201,6 @@ async function bootScreen() {
   cursor.col1(); cursor.clr();
   stdout.write(`${barLabel}  ${OC.green}${'█'.repeat(BOOT_BAR)}${RESET}  ${OC.green}100%${RESET}\n`);
 
-  // Final static frame
   linesBelow += 2;
   frameIdx = 1;
   redrawOcto();
@@ -284,38 +255,49 @@ function showHelp() {
   console.log(chalk.bold.white('USAGE'));
   console.log(`  ${chalk.cyan('node index.js')} ${chalk.yellow('[/option]')}\n`);
 
-  console.log(chalk.bold.white('OPTIONS'));
-  const opts = [
-    ['/start',      'Begin a zombie survival game session'],
-    ['/attack',     'Fight off an active zombie wave (-20% battery)'],
-    ['/watercycle', 'Run the watercycle loop manually (-20% battery)'],
-    ['/powersave',  'Toggle power-saving mode (lower defences)'],
-    ['/restart',    'Rebuild the bunker after death'],
-    ['/all',        'Show all sections'],
-    ['/disk',       'Show disk usage only'],
-    ['/ram',        'Show RAM usage only'],
-    ['/cpu',        'Show CPU usage only'],
-    ['/gpu',        'Show GPU usage only'],
-    ['/io',         'Show Disk I/O only'],
-    ['/ram /gpu',   'Combine multiple sections'],
-    ['/clear',      'Clear the screen'],
-    ['/help, /h',   'Show this help message'],
-    ['/exit, exit',  'Quit the program'],
+  console.log(chalk.bold.white('GAME'));
+  const gameOpts = [
+    ['/start',       'Begin a survival session'],
+    ['/attack',      'Fight off an active zombie wave (-20% battery)'],
+    ['/powersave',   'Power-save mode for 60s (pauses chores & wave countdown)'],
+    ['/detonate',    'Last resort during blackout — 50% chance of survival'],
+    ['/restart',     'Rebuild the bunker after death'],
   ];
-  for (const [flag, desc] of opts) {
-    console.log(`  ${chalk.yellow(flag.padEnd(18))} ${chalk.white(desc)}`);
-  }
+  for (const [flag, desc] of gameOpts) console.log(`  ${chalk.yellow(flag.padEnd(18))} ${chalk.white(desc)}`);
 
-  console.log('\n' + chalk.bold.white('EXAMPLES'));
-  console.log(`  ${chalk.cyan('/all')}       Show everything`);
-  console.log(`  ${chalk.cyan('/cpu')}       Show CPU only`);
-  console.log(`  ${chalk.cyan('/disk')}      Show disk usage only`);
-  console.log(`  ${chalk.cyan('/ram /gpu')}  Show RAM and GPU\n`);
+  console.log('\n' + chalk.bold.white('CHORES'));
+  const choreOpts = [
+    ['/watercycle',  'Run the water recycling loop (-20% battery)'],
+    ['/sweep',       'Clear debris from the bunker (-8% battery)'],
+    ['/plants',      'Water the plants (-6% battery)'],
+    ['/vents',       'Wash the air vents (-10% battery)'],
+  ];
+  for (const [flag, desc] of choreOpts) console.log(`  ${chalk.yellow(flag.padEnd(18))} ${chalk.white(desc)}`);
 
-  console.log(chalk.bold.white('COLOR GUIDE'));
-  console.log(`  ${chalk.green('Green')}   0% – 60%   Normal`);
-  console.log(`  ${chalk.yellow('Yellow')}  60% – 85%  Moderate`);
-  console.log(`  ${chalk.red('Red')}     85%+       High usage\n`);
+  console.log('\n' + chalk.bold.white('VISITORS'));
+  const npcOpts = [
+    ['/admit',       'Admit the visitor at the hatch'],
+    ['/turnaway',    'Send the visitor away'],
+    ['/talk',        'Re-open conversation with a staying guest'],
+    ['1, 2, 3',      'Respond during a conversation'],
+  ];
+  for (const [flag, desc] of npcOpts) console.log(`  ${chalk.yellow(flag.padEnd(18))} ${chalk.white(desc)}`);
+
+  console.log('\n' + chalk.bold.white('SYSTEM INFO'));
+  const sysOpts = [
+    ['/all',         'Show all sections'],
+    ['/disk',        'Show disk usage only'],
+    ['/ram',         'Show RAM usage only'],
+    ['/cpu',         'Show CPU usage only'],
+    ['/gpu',         'Show GPU usage only'],
+    ['/io',          'Show Disk I/O only'],
+    ['/clear',       'Clear the screen'],
+    ['/help, /h',    'Show this help message'],
+    ['/exit',        'Quit the program'],
+  ];
+  for (const [flag, desc] of sysOpts) console.log(`  ${chalk.yellow(flag.padEnd(18))} ${chalk.white(desc)}`);
+
+  console.log('');
 }
 
 // ── Sections ──────────────────────────────────────────────────────────────────
@@ -406,21 +388,22 @@ function spinner(label) {
 
 // ── Command handler ───────────────────────────────────────────────────────────
 
-async function runCommand(input) {
-  const args = input.trim().toLowerCase().split(/\s+/).filter(Boolean).map(a => a.replace(/^\//, ''));
+function tryChatChoice(input, rl) {
+  if (!chat.isActive()) return false;
+  const trimmed = input.trim();
+  if (!/^[123]$/.test(trimmed)) return false;
+  npcs.handleChoice(parseInt(trimmed, 10), rl);
+  return true;
+}
 
+async function runCommand(input, rl) {
+  if (tryChatChoice(input, rl)) return;
+
+  const args = input.trim().toLowerCase().split(/\s+/).filter(Boolean).map(a => a.replace(/^\//, ''));
   if (args.length === 0) return;
 
-  if (args.includes('help') || args.includes('h') || args.includes('?')) {
-    showHelp();
-    return;
-  }
-
-  if (args.includes('clear')) {
-    console.clear();
-    header();
-    return;
-  }
+  if (args.includes('help') || args.includes('h') || args.includes('?')) { showHelp(); return; }
+  if (args.includes('clear')) { console.clear(); header(); return; }
 
   if (args.includes('start')) {
     if (game.gameMode && game.alive) {
@@ -434,11 +417,7 @@ async function runCommand(input) {
 
   if (args.includes('restart')) {
     if (!game.gameMode) {
-      console.log(
-        chalk.dim('  No game session to restart. Type ') +
-        chalk.yellow('/start') +
-        chalk.dim(' to begin one.\n')
-      );
+      console.log(chalk.dim('  No game session to restart. Type ') + chalk.yellow('/start') + chalk.dim(' to begin one.\n'));
     } else if (game.alive) {
       console.log(chalk.dim('  Bunker is already operational.\n'));
     } else {
@@ -448,46 +427,47 @@ async function runCommand(input) {
   }
 
   if (game.gameMode && !game.alive) {
-    console.log(
-      chalk.dim('  You are dead. Type ') +
-      chalk.yellow('/restart') +
-      chalk.dim(' to rebuild the bunker.\n')
-    );
+    console.log(chalk.dim('  You are dead. Type ') + chalk.yellow('/restart') + chalk.dim(' to rebuild the bunker.\n'));
     return;
   }
 
   if (args.includes('attack')) {
-    if (!game.gameMode) {
-      console.log(
-        chalk.dim('  No game in progress. Type ') +
-        chalk.yellow('/start') +
-        chalk.dim(' to begin a zombie survival session.\n')
-      );
-    } else {
-      attackZombies();
-    }
+    if (!game.gameMode) { console.log(chalk.dim('  No game in progress. Type ') + chalk.yellow('/start') + chalk.dim(' first.\n')); }
+    else { zombies.attackZombies(); }
     return;
   }
 
-  if (args.includes('watercycle')) {
-    if (!game.gameMode) {
-      console.log(chalk.dim('  No game in progress. Type ') + chalk.yellow('/start') + chalk.dim(' first.\n'));
-    } else {
-      manualWatercycle();
-    }
-    return;
+  if (args.includes('admit')) {
+    if (!game.gameMode) { console.log(chalk.dim('  No game in progress.\n')); return; }
+    npcs.admit(rl); return;
+  }
+  if (args.includes('turnaway')) {
+    if (!game.gameMode) { console.log(chalk.dim('  No game in progress.\n')); return; }
+    npcs.turnAway(rl); return;
+  }
+  if (args.includes('talk')) {
+    if (!game.gameMode) { console.log(chalk.dim('  No game in progress.\n')); return; }
+    npcs.talk(rl); return;
+  }
+
+  const choreIds = ['watercycle', 'sweep', 'plants', 'vents'];
+  const choreArg = args.find(a => choreIds.includes(a));
+  if (choreArg) {
+    if (!game.gameMode) { console.log(chalk.dim('  No game in progress. Type ') + chalk.yellow('/start') + chalk.dim(' first.\n')); return; }
+    chores.runManually(choreArg); return;
   }
 
   if (args.includes('powersave')) {
-    if (!game.gameMode) {
-      console.log(chalk.dim('  No game in progress. Type ') + chalk.yellow('/start') + chalk.dim(' first.\n'));
-    } else {
-      togglePowerSave();
-    }
-    return;
+    if (!game.gameMode) { console.log(chalk.dim('  No game in progress.\n')); return; }
+    togglePowerSave(); return;
   }
 
-  const known = ['disk', 'ram', 'cpu', 'gpu', 'io', 'all', 'clear', 'help', 'h', '?', 'exit', 'quit', 'attack', 'restart', 'start', 'watercycle', 'powersave'];
+  if (args.includes('detonate')) {
+    if (!game.gameMode) { console.log(chalk.dim('  No game in progress.\n')); return; }
+    await detonate(rl); return;
+  }
+
+  const known = ['disk', 'ram', 'cpu', 'gpu', 'io', 'all', 'clear', 'help', 'h', '?', 'exit', 'quit', 'detonate'];
   const unknown = args.filter(a => !known.includes(a));
   if (unknown.length) {
     console.log(chalk.red(`  Unknown command: ${unknown.join(', ')}`));
@@ -513,21 +493,32 @@ async function runCommand(input) {
 
 // ── Day / night cycle ─────────────────────────────────────────────────────────
 
-const CYCLE_MS = 5 * 60 * 1000;   // switch every 5 minutes
+const CYCLE_MS = 3 * 60 * 1000;
+
+async function playDayNightAnim(rl, toNight) {
+  if (toNight) {
+    const frames = [
+      chalk.yellow('  ☀') + chalk.dim('  the sun begins to sink...'),
+      chalk.dim('  ◑  dusk settles in...'),
+      chalk.blue('  ☽  ') + chalk.dim('night falls over the bunker.'),
+    ];
+    for (const f of frames) { printAbovePrompt(rl, f); await new Promise(r => setTimeout(r, 500)); }
+  } else {
+    const frames = [
+      chalk.blue('  ☽') + chalk.dim('  the moon fades...'),
+      chalk.dim('  ◐  first light on the horizon...'),
+      chalk.yellow('  ☀  ') + chalk.dim('dawn breaks — solar receivers online.'),
+    ];
+    for (const f of frames) { printAbovePrompt(rl, f); await new Promise(r => setTimeout(r, 500)); }
+  }
+}
 
 function startDayNightCycle(rl) {
   return setInterval(() => {
     if (game.animating) return;
-    if (!game.gameMode || !game.alive) return;  // only cycle while a live game is running
+    if (!game.gameMode || !game.alive) return;
     game.isNight = !game.isNight;
-
-    if (game.isNight) {
-      const art = renderNightFrame(1).slice(0, 5).map(r => '  ' + r).join('\n');
-      printAbovePrompt(rl, `  ${OC.muted}— night falls — auto-defence online —${RESET}\n` + art);
-    } else {
-      const art = renderFrame(1).map(r => '  ' + r).join('\n');
-      printAbovePrompt(rl, `  ${OC.muted}— dawn breaks — solar receivers active —${RESET}\n` + art);
-    }
+    playDayNightAnim(rl, game.isNight);
   }, CYCLE_MS);
 }
 
@@ -558,7 +549,7 @@ function startPrompt() {
     }
 
     try {
-      await runCommand(input);
+      await runCommand(input, rl);
     } catch (err) {
       console.error(chalk.red('  Error: ') + err.message + '\n');
     }
