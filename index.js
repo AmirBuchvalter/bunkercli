@@ -12,15 +12,14 @@ import * as zombies from './managers/zombieManager.js';
 import * as chores  from './managers/choreManager.js';
 import * as npcs    from './managers/npcManager.js';
 import * as chat    from './managers/chatManager.js';
+import { RESET, renderRows, TREE_ROWS, BUNKER_ROWS, BUNKER_FLOOR } from './art.js';
 
 const { stdout } = process;
 const BAR_WIDTH = 30;
 
 // ── Boot animation ────────────────────────────────────────────────────────────
 
-const RESET = '\x1b[0m';
-const rgb   = (r, g, b) => `\x1b[38;2;${r};${g};${b}m`;
-const bgRgb = (r, g, b) => `\x1b[48;2;${r};${g};${b}m`;
+const rgb = (r, g, b) => `\x1b[38;2;${r};${g};${b}m`;
 
 const cursor = {
   hide : () => stdout.write('\x1b[?25l'),
@@ -48,59 +47,31 @@ const OC = {
 };
 
 // Day frames only. Night is represented in the prompt by the ☽ icon.
-const TREE_ROWS = [
-  [0,0,0,6,0,0,0,0,0,6,0,0,0],
-  [0,0,6,6,6,0,0,0,6,6,6,0,0],
-  [0,6,6,6,6,6,0,6,6,6,6,6,0],
-  [0,0,6,1,6,0,0,0,6,1,6,0,0],
-  [7,7,7,1,7,7,7,7,7,1,7,7,7],
-  [2,2,2,2,2,2,2,2,2,2,2,2,2],
-  [2,3,3,3,3,3,3,3,3,3,3,3,2],
-  [2,3,0,0,0,0,0,0,0,0,0,3,2],
-];
-const BUNKER_FLOOR = [2,3,3,3,3,3,3,3,3,3,3,3,2];
+const SCENE_BASE = [...TREE_ROWS, ...BUNKER_ROWS];
 
 const FRAMES = [
   [
-    ...TREE_ROWS,
+    ...SCENE_BASE,
     [2,3,0,0,0,4,0,0,0,0,0,3,2],
     [2,3,0,0,5,5,5,0,0,0,0,3,2],
     [2,3,0,0,5,0,5,0,0,0,0,3,2],
     BUNKER_FLOOR,
   ],
   [
-    ...TREE_ROWS,
+    ...SCENE_BASE,
     [2,3,0,0,0,0,4,0,0,0,0,3,2],
     [2,3,0,0,0,5,5,5,0,0,0,3,2],
     [2,3,0,0,0,5,0,5,0,0,0,3,2],
     BUNKER_FLOOR,
   ],
   [
-    ...TREE_ROWS,
+    ...SCENE_BASE,
     [2,3,0,0,0,0,0,4,0,0,0,3,2],
     [2,3,0,0,0,0,5,5,5,0,0,3,2],
     [2,3,0,0,0,0,5,0,5,0,0,3,2],
     BUNKER_FLOOR,
   ],
 ];
-
-const PAL_FG = [null, OC.trunk, OC.dark, OC.concrete, OC.eye, OC.military, OC.leaves, OC.green];
-const rgbNums = (esc) => { const m = esc.match(/38;2;(\d+);(\d+);(\d+)/); return m ? [+m[1],+m[2],+m[3]] : [0,0,0]; };
-
-function renderRows(rows) {
-  return rows.map(row => {
-    let s = '';
-    for (const v of row) {
-      if (PAL_FG[v]) {
-        const [r,g,b] = rgbNums(PAL_FG[v]);
-        s += bgRgb(r,g,b) + '  ' + RESET;
-      } else {
-        s += '  ';
-      }
-    }
-    return s;
-  });
-}
 
 function renderFrame(fi) { return renderRows(FRAMES[fi]); }
 
